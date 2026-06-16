@@ -1,0 +1,105 @@
+name: traffic-queue-lab-local
+
+x-app-environment: &app-environment
+  SPRING_PROFILES_ACTIVE: local
+  SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-traffic_queue_lab}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+  SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-traffic_user}
+  SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-traffic_password}
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:-10}
+
+x-app-common: &app-common
+  build:
+    context: ../..
+    dockerfile: docker/local/Dockerfile
+  env_file:
+    - ../../.env.local
+  environment: *app-environment
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: traffic-queue-lab-mysql
+    env_file:
+      - ../../.env.local
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-traffic_queue_lab}
+      MYSQL_USER: ${MYSQL_USER:-traffic_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-traffic_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: traffic-queue-lab-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app-8080:
+    <<: *app-common
+    container_name: traffic-queue-lab-app-8080
+    environment:
+      <<: *app-environment
+      SERVER_PORT: "8080"
+    ports:
+      - "8080:8080"
+
+  app-8081:
+    <<: *app-common
+    container_name: traffic-queue-lab-app-8081
+    environment:
+      <<: *app-environment
+      SERVER_PORT: "8081"
+    ports:
+      - "8081:8081"
+
+  app-8082:
+    <<: *app-common
+    container_name: traffic-queue-lab-app-8082
+    environment:
+      <<: *app-environment
+      SERVER_PORT: "8082"
+    ports:
+      - "8082:8082"
+
+  app-8083:
+    <<: *app-common
+    container_name: traffic-queue-lab-app-8083
+    environment:
+      <<: *app-environment
+      SERVER_PORT: "8083"
+    ports:
+      - "8083:8083"
+
+volumes:
+  mysql-data:
+  redis-data:
