@@ -158,10 +158,16 @@ REDIS_MEMORY_LIMIT=256m
 백엔드 인스턴스는 4개를 띄운다. 각 인스턴스는 작은 DB 커넥션 풀을 사용한다.
 
 ```env
-SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=10
+SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=3
+SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=3
+SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=1000
 ```
 
-이 설정은 DB 접근 경로에 의도적인 병목을 만들기 위한 값이다. Redis는 모든 백엔드 인스턴스가 공유하는 대기열 저장소로 사용한다.
+이 설정은 DB 접근 경로에 의도적인 병목을 만들기 위한 값이다.
+
+커넥션 풀이 모두 사용 중인 상태에서 새 요청이 `1000ms` 안에 커넥션을 얻지 못하면 Hikari connection timeout이 발생할 수 있다. Direct API 부하 테스트에서는 이 현상이 DB 병목의 관찰 지점이 된다.
+
+Redis는 모든 백엔드 인스턴스가 공유하는 대기열 저장소로 사용한다.
 
 ## 상태 확인
 

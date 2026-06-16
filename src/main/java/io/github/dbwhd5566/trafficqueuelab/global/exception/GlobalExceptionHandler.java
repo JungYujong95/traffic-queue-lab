@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponseException;
@@ -69,6 +70,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.NOT_FOUND.getStatus())
                 .body(ErrorResponse.of(ErrorCode.NOT_FOUND));
+    }
+
+    @ExceptionHandler(CannotGetJdbcConnectionException.class)
+    public ResponseEntity<ErrorResponse> handleCannotGetJdbcConnectionException() {
+        return ResponseEntity
+                .status(ErrorCode.DB_CONNECTION_TIMEOUT.getStatus())
+                .body(ErrorResponse.of(ErrorCode.DB_CONNECTION_TIMEOUT));
     }
 
     @ExceptionHandler(ErrorResponseException.class)

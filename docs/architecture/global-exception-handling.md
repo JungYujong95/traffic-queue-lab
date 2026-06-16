@@ -12,6 +12,7 @@ It handles:
 - missing request parameters
 - request parameter type mismatches
 - missing static or API resources
+- DB connection acquisition failures
 - unexpected exceptions
 
 ## Flow

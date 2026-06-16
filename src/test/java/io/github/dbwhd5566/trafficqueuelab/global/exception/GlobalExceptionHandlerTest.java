@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -60,6 +61,15 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.MISSING_REQUIRED_PARAMETER.getCode()));
     }
 
+    @Test
+    void cannotGetJdbcConnectionReturnsServiceUnavailable() throws Exception {
+        mockMvc.perform(get("/test/db-connection-timeout"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(ErrorCode.DB_CONNECTION_TIMEOUT.getCode()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.DB_CONNECTION_TIMEOUT.getMessage()));
+    }
+
     @RestController
     private static class TestController {
 
@@ -74,6 +84,11 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/test/missing-parameter")
         void missingParameter(@RequestParam String value) {
+        }
+
+        @GetMapping("/test/db-connection-timeout")
+        void dbConnectionTimeout() {
+            throw new CannotGetJdbcConnectionException("Connection is not available");
         }
     }
 

@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import io.github.dbwhd5566.trafficqueuelab.global.exception.BusinessException;
+import io.github.dbwhd5566.trafficqueuelab.global.exception.ErrorCode;
 
 @Entity
 @Table(name = "coupons")
@@ -53,6 +55,13 @@ public class Coupon {
             LocalDateTime endedAt
     ) {
         return new Coupon(name, totalQuantity, startedAt, endedAt);
+    }
+
+    public void issue() {
+        if (issuedQuantity >= totalQuantity) {
+            throw new BusinessException(ErrorCode.COUPON_SOLD_OUT);
+        }
+        issuedQuantity++;
     }
 
     public Long getId() {

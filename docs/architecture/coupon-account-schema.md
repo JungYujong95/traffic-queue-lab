@@ -50,3 +50,26 @@ This prevents the same account from receiving the same coupon more than once, ev
 The API can use `X-Account-Id` to identify dummy users during load tests.
 
 Authentication is intentionally excluded so the benchmark focuses on DB connection pool pressure, Redis waiting queue admission control, and coupon issue write throughput.
+
+## Direct Coupon Issue API
+
+The direct issue API bypasses Redis and enters the database immediately.
+
+```http
+POST /api/v1/coupons/{couponId}/issue/direct
+X-Account-Id: 1
+```
+
+This API is the baseline for load testing.
+
+The application service uses a pessimistic write lock when loading the coupon row.
+
+```text
+CouponIssueController
+  -> CouponIssueService.issueDirect()
+  -> CouponRepository.findByIdForUpdate()
+  -> Coupon.issue()
+  -> CouponIssueRepository.save()
+```
+
+The direct flow intentionally exposes DB connection pool pressure and coupon row lock contention. The Redis waiting queue flow will be compared against this baseline later.
