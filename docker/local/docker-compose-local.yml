@@ -2,25 +2,31 @@ name: traffic-queue-lab-local
 
 x-app-environment: &app-environment
   SPRING_PROFILES_ACTIVE: local
+  JAVA_TOOL_OPTIONS: ${BACKEND_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0 -XX:+ExitOnOutOfMemoryError}
   SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-traffic_queue_lab}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
   SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-traffic_user}
   SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-traffic_password}
+  # 대기열 실험: 모든 백엔드 인스턴스가 하나의 Redis 대기열을 공유한다. (무상태)
   SPRING_DATA_REDIS_HOST: redis
   SPRING_DATA_REDIS_PORT: "6379"
+  # 병목 실험: 각 백엔드 인스턴스의 DB 커넥션 풀을 의도적으로 작게 유지한다.
   SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:-10}
 
 x-app-common: &app-common
   build:
     context: ../..
-    dockerfile: docker/local/Dockerfile
+    dockerfile: docker/local/Dockerfile.backend
   env_file:
     - ../../.env.local
   environment: *app-environment
+  mem_limit: ${BACKEND_MEMORY_LIMIT:-512m}
   depends_on:
     mysql:
       condition: service_healthy
     redis:
       condition: service_healthy
+  profiles:
+    - backend
   restart: unless-stopped
 
 services:
@@ -39,6 +45,7 @@ services:
       - --collation-server=utf8mb4_unicode_ci
     ports:
       - "${MYSQL_PORT:-3306}:3306"
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-512m}
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -55,6 +62,7 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    mem_limit: ${REDIS_MEMORY_LIMIT:-128m}
     volumes:
       - redis-data:/data
     healthcheck:

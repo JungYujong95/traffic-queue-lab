@@ -4,9 +4,9 @@ spring:
       on-profile: local
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/traffic_queue_lab?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:traffic_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:traffic_password}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:10}
@@ -15,7 +15,7 @@ spring:
 
   data:
     redis:
-      host: ${SPRING_DATA_REDIS_HOST}
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
       timeout: ${SPRING_DATA_REDIS_TIMEOUT:3s}
 
