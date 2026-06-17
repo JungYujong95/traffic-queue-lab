@@ -9,6 +9,8 @@ public enum ErrorCode {
     MISSING_REQUIRED_PARAMETER(HttpStatus.BAD_REQUEST, "COMMON_400_003", "필수 요청 파라미터가 누락되었습니다."),
     METHOD_ARGUMENT_TYPE_MISMATCH(HttpStatus.BAD_REQUEST, "COMMON_400_004", "요청 파라미터 타입이 올바르지 않습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "COMMON_404_001", "요청한 리소스를 찾을 수 없습니다."),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "COMMON_401_001", "인증이 필요합니다."),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "COMMON_403_001", "권한이 없습니다."),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCOUNT_404_001", "계정을 찾을 수 없습니다."),
     COUPON_NOT_FOUND(HttpStatus.NOT_FOUND, "COUPON_404_001", "쿠폰을 찾을 수 없습니다."),
     COUPON_SOLD_OUT(HttpStatus.CONFLICT, "COUPON_409_001", "쿠폰이 모두 소진되었습니다."),

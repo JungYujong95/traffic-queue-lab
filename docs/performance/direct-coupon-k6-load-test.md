@@ -43,6 +43,8 @@ SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=1000
 load-test/k6/direct-coupon-issue.js
 ```
 
+기본 프로파일은 `constant-arrival-rate` 기반이며, 초당 유입량을 직접 고정한다.
+
 ## Run
 
 인프라와 애플리케이션을 먼저 실행한다.
@@ -64,12 +66,32 @@ k6를 실행한다.
 k6 run load-test/k6/direct-coupon-issue.js
 ```
 
+Dockerfile로 따로 실행할 수도 있다.
+
+```bash
+docker build -t traffic-queue-k6 -f load-test/k6/Dockerfile load-test/k6
+docker run --rm --network host \
+  -e BASE_URL=http://localhost:8080 \
+  -e COUPON_ID=1 \
+  -e ACCOUNT_COUNT=100000 \
+  -e KTX_RPS=500 \
+  -e KTX_DURATION=2m \
+  -e KTX_PREALLOCATED_VUS=500 \
+  -e KTX_MAX_VUS=1500 \
+  -e THINK_TIME_SECONDS=0.1 \
+  traffic-queue-k6
+```
+
 환경변수로 대상과 부하 조건을 일부 조정할 수 있다.
 
 ```bash
 BASE_URL=http://localhost:8080 \
 COUPON_ID=1 \
-ACCOUNT_COUNT=10000 \
+ACCOUNT_COUNT=100000 \
+KTX_RPS=500 \
+KTX_DURATION=2m \
+KTX_PREALLOCATED_VUS=500 \
+KTX_MAX_VUS=1500 \
 THINK_TIME_SECONDS=0.1 \
 k6 run load-test/k6/direct-coupon-issue.js
 ```
@@ -82,51 +104,48 @@ k6 run load-test/k6/direct-coupon-issue.js
 export const options = {
   scenarios: {
     direct_coupon_issue: {
-      executor: 'ramping-vus',
-      stages: [
-        { duration: '30s', target: 50 },
-        { duration: '1m', target: 200 },
-        { duration: '30s', target: 500 },
-        { duration: '30s', target: 0 },
-      ],
+      executor: 'constant-arrival-rate',
+      rate: Number(__ENV.KTX_RPS || 500),
+      timeUnit: '1s',
+      duration: __ENV.KTX_DURATION || '2m',
+      preAllocatedVUs: Number(__ENV.KTX_PREALLOCATED_VUS || 500),
+      maxVUs: Number(__ENV.KTX_MAX_VUS || 1500),
     },
   },
 };
 ```
 
-`ramping-vus`는 가상 사용자를 시간에 따라 늘리고 줄인다.
+`constant-arrival-rate`는 초당 요청 수를 고정한다.
 
-- 30초 동안 50명까지 증가
-- 1분 동안 200명까지 증가
-- 30초 동안 500명까지 증가
-- 30초 동안 0명으로 감소
+- 기본값은 초당 500건
+- 실행 시간은 기본 2분
+- `preAllocatedVUs` 기본값은 500
+- `maxVUs` 기본값은 1,500
 
-Direct API는 Redis 없이 바로 DB에 들어가므로 이 구간에서 DB 커넥션 풀과 비관락 경합이 드러난다.
+이 프로파일은 500 VU 같은 정적인 동시성 수치보다 훨씬 직접적으로 “명절 KTX” 같은 밀집 상황을 만든다.
+Direct API는 `X-Account-Id`로 더미 계정을 식별하므로 JWT 로그인 비용 없이 DB 직행 baseline을 관찰한다.
 
 ### thresholds
 
 ```javascript
 thresholds: {
-  http_req_failed: ['rate<0.50'],
   http_req_duration: ['p(95)<5000'],
-  direct_issue_success_rate: ['rate>0.01'],
 }
 ```
 
 테스트가 통과했다고 볼 최소 기준이다.
 
-- 전체 HTTP 실패율은 50% 미만
 - p95 응답 시간은 5초 미만
-- 성공 발급 비율은 1% 초과
 
-쿠폰 수량이 1,000개라서 테스트 후반에는 `409 COUPON_SOLD_OUT`이 정상적으로 늘어난다. 그래서 실패율 기준은 느슨하게 잡았다.
+쿠폰 수량이 100,000개라서 짧은 로컬 테스트에서는 매진보다 DB 병목을 먼저 관찰하기 쉽다.
+DB 병목 관찰 중에는 `503 DB_503_001`도 의도한 관찰 대상이므로 커스텀 카운터로 따로 본다.
 
 ### Environment Variables
 
 ```javascript
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const COUPON_ID = Number(__ENV.COUPON_ID || 1);
-const ACCOUNT_COUNT = Number(__ENV.ACCOUNT_COUNT || 10000);
+const ACCOUNT_COUNT = Number(__ENV.ACCOUNT_COUNT || 100000);
 const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME_SECONDS || 0.1);
 ```
 
@@ -137,11 +156,37 @@ const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME_SECONDS || 0.1);
 - `ACCOUNT_COUNT`: 더미 account 개수
 - `THINK_TIME_SECONDS`: 요청 사이 대기 시간
 
+## Dockerfile Meaning
+
+`load-test/k6/Dockerfile`은 k6 공식 이미지를 기반으로 한다.
+
+```dockerfile
+FROM grafana/k6:0.57.0
+WORKDIR /scripts
+ARG K6_SCRIPT=direct-coupon-issue.js
+COPY ${K6_SCRIPT} /scripts/load-test.js
+ENTRYPOINT ["k6", "run", "/scripts/load-test.js"]
+```
+
+- `FROM grafana/k6:0.57.0`: k6 실행 환경을 그대로 사용한다.
+- `WORKDIR /scripts`: 스크립트 위치를 고정한다.
+- `ARG K6_SCRIPT`: 빌드할 스크립트를 바꾼다.
+- `COPY ...`: 선택한 부하 테스트 스크립트를 이미지에 포함한다.
+- `ENTRYPOINT ...`: 컨테이너를 실행하면 바로 선택한 k6 스크립트가 시작된다.
+
+JWT 스크립트를 이미지로 실행하고 싶으면 이렇게 빌드한다.
+
+```bash
+docker build -t traffic-queue-k6 -f load-test/k6/Dockerfile --build-arg K6_SCRIPT=jwt-coupon-issue.js load-test/k6
+```
+
+이 방식은 로컬에 k6를 설치하지 않고도 `docker build` / `docker run`만으로 별도 실행이 가능하다는 장점이 있다.
+
 ### Account Id Generation
 
 ```javascript
 function nextAccountId() {
-  return ((__VU + __ITER) % ACCOUNT_COUNT) + 1;
+  return ((__VU * 10007) + __ITER) % ACCOUNT_COUNT + 1;
 }
 ```
 
@@ -149,7 +194,7 @@ k6의 `__VU`는 현재 가상 사용자 번호이고, `__ITER`는 해당 가상 
 
 이 둘을 이용해 `1`부터 `ACCOUNT_COUNT` 사이의 account id를 만든다.
 
-더미 account가 10,000명 있으므로 account id도 `1..10000` 범위로 제한한다.
+더미 account가 100,000명 있으므로 account id도 `1..100000` 범위로 제한한다.
 
 ### Request
 
@@ -183,6 +228,7 @@ if (response.status === 409) return classifyConflict(response);
 - `404`: account 또는 coupon 없음
 - `409 + COUPON_409_001`: 쿠폰 매진
 - `409 + COUPON_409_002`: 중복 발급
+- `503 + DB_503_001`: DB 커넥션 획득 timeout
 - 그 외: 예상하지 못한 응답
 
 ### Custom Metrics
@@ -191,12 +237,13 @@ if (response.status === 409) return classifyConflict(response);
 const successCount = new Counter('direct_issue_success_count');
 const soldOutCount = new Counter('direct_issue_sold_out_count');
 const duplicateCount = new Counter('direct_issue_duplicate_count');
+const dbTimeoutCount = new Counter('direct_issue_db_timeout_count');
 const unexpectedCount = new Counter('direct_issue_unexpected_count');
 ```
 
 k6 기본 지표 외에 쿠폰 발급 도메인 기준 지표를 만든다.
 
-부하 테스트 결과에서 단순 HTTP status만 보는 것이 아니라, 성공/매진/중복/예상 밖 실패를 분리해서 볼 수 있다.
+부하 테스트 결과에서 단순 HTTP status만 보는 것이 아니라, 성공/매진/중복/DB timeout/예상 밖 실패를 분리해서 볼 수 있다.
 
 ## Expected Result
 
@@ -207,6 +254,6 @@ Direct API에서는 요청이 바로 DB로 들어간다.
 - DB connection pool 대기 증가
 - coupon row pessimistic lock 경합 증가
 - p95/p99 응답 시간 증가
-- 쿠폰 1,000개 소진 후 `COUPON_409_001` 증가
+- 쿠폰 100,000개 소진 후 `COUPON_409_001` 증가
 
 이 결과를 Redis 대기열 적용 후 queued API 결과와 비교한다.

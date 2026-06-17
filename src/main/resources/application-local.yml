@@ -26,3 +26,18 @@ spring:
     properties:
       hibernate:
         format_sql: ${SPRING_JPA_FORMAT_SQL:false}
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:traffic-queue-lab-local-jwt-secret-key-traffic-queue-lab}
+    issuer: ${APP_JWT_ISSUER:traffic-queue-lab}
+    access-token-ttl: ${APP_JWT_ACCESS_TOKEN_TTL:PT1H}
+
+  wait-queue:
+    worker:
+      enabled: ${APP_WAIT_QUEUE_WORKER_ENABLED:true}
+      coupon-id: ${APP_WAIT_QUEUE_WORKER_COUPON_ID:1}
+      batch-size: ${APP_WAIT_QUEUE_WORKER_BATCH_SIZE:1}
+      fixed-delay-ms: ${APP_WAIT_QUEUE_WORKER_FIXED_DELAY_MS:50}
+      lock-ttl: ${APP_WAIT_QUEUE_WORKER_LOCK_TTL:30s}
+      result-ttl: ${APP_WAIT_QUEUE_RESULT_TTL:30m}

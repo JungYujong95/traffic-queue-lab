@@ -1,10 +1,10 @@
 -- Local load-test seed data for MySQL 8.
--- Creates 10,000 dummy accounts and one limited coupon.
+-- Creates 100,000 dummy accounts and one load-test coupon.
 
-SET @account_count = 10000;
+SET @account_count = 100000;
 SET @coupon_name = 'load-test-coupon';
-SET @coupon_total_quantity = 1000;
-SET SESSION cte_max_recursion_depth = 10000;
+SET @coupon_total_quantity = 100000;
+SET SESSION cte_max_recursion_depth = 100000;
 
 DELETE FROM coupon_issues
 WHERE coupon_id = 1;

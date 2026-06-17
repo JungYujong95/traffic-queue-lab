@@ -1,10 +1,13 @@
 package io.github.dbwhd5566.trafficqueuelab.global.exception;
 
+import java.sql.SQLTransientConnectionException;
 import java.util.List;
 import java.util.Objects;
+import org.hibernate.exception.JDBCConnectionException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponseException;
@@ -72,8 +75,16 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(ErrorCode.NOT_FOUND));
     }
 
-    @ExceptionHandler(CannotGetJdbcConnectionException.class)
-    public ResponseEntity<ErrorResponse> handleCannotGetJdbcConnectionException() {
+    @ExceptionHandler({
+            CannotGetJdbcConnectionException.class,
+            CannotCreateTransactionException.class,
+            JDBCConnectionException.class
+    })
+    public ResponseEntity<ErrorResponse> handleDbConnectionException(Exception exception) {
+        if (!isConnectionTimeout(exception)) {
+            return handleException();
+        }
+
         return ResponseEntity
                 .status(ErrorCode.DB_CONNECTION_TIMEOUT.getStatus())
                 .body(ErrorResponse.of(ErrorCode.DB_CONNECTION_TIMEOUT));
@@ -110,5 +121,25 @@ public class GlobalExceptionHandler {
                 Objects.toString(fieldError.getRejectedValue(), null),
                 fieldError.getDefaultMessage()
         );
+    }
+
+    private boolean isConnectionTimeout(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof CannotGetJdbcConnectionException
+                    || current instanceof JDBCConnectionException
+                    || current instanceof SQLTransientConnectionException) {
+                return true;
+            }
+
+            String message = current.getMessage();
+            if (message != null && message.contains("Connection is not available")) {
+                return true;
+            }
+
+            current = current.getCause();
+        }
+
+        return false;
     }
 }

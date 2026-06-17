@@ -8,12 +8,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.sql.SQLTransientConnectionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -70,6 +72,15 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.message").value(ErrorCode.DB_CONNECTION_TIMEOUT.getMessage()));
     }
 
+    @Test
+    void transactionConnectionTimeoutReturnsServiceUnavailable() throws Exception {
+        mockMvc.perform(get("/test/transaction-connection-timeout"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(ErrorCode.DB_CONNECTION_TIMEOUT.getCode()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.DB_CONNECTION_TIMEOUT.getMessage()));
+    }
+
     @RestController
     private static class TestController {
 
@@ -89,6 +100,14 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/db-connection-timeout")
         void dbConnectionTimeout() {
             throw new CannotGetJdbcConnectionException("Connection is not available");
+        }
+
+        @GetMapping("/test/transaction-connection-timeout")
+        void transactionConnectionTimeout() {
+            throw new CannotCreateTransactionException(
+                    "Could not open JPA EntityManager for transaction",
+                    new SQLTransientConnectionException("HikariPool-1 - Connection is not available")
+            );
         }
     }
 

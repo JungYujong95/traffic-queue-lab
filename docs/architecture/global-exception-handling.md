@@ -12,7 +12,7 @@ It handles:
 - missing request parameters
 - request parameter type mismatches
 - missing static or API resources
-- DB connection acquisition failures
+- DB connection acquisition failures, including Hikari timeouts wrapped by transaction or Hibernate exceptions
 - unexpected exceptions
 
 ## Flow

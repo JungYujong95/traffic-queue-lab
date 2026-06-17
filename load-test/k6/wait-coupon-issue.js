@@ -4,7 +4,7 @@ import { Counter, Rate } from 'k6/metrics';
 
 export const options = {
   scenarios: {
-    direct_coupon_issue: {
+    wait_coupon_issue: {
       executor: 'constant-arrival-rate',
       rate: Number(__ENV.KTX_RPS || 500),
       timeUnit: '1s',
@@ -23,17 +23,18 @@ const COUPON_ID = Number(__ENV.COUPON_ID || 1);
 const ACCOUNT_COUNT = Number(__ENV.ACCOUNT_COUNT || 100000);
 const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME_SECONDS || 0.1);
 
-const successCount = new Counter('direct_issue_success_count');
-const soldOutCount = new Counter('direct_issue_sold_out_count');
-const duplicateCount = new Counter('direct_issue_duplicate_count');
-const notFoundCount = new Counter('direct_issue_not_found_count');
-const dbTimeoutCount = new Counter('direct_issue_db_timeout_count');
-const unexpectedCount = new Counter('direct_issue_unexpected_count');
-const successRate = new Rate('direct_issue_success_rate');
+const waitingCount = new Counter('wait_issue_waiting_count');
+const processingCount = new Counter('wait_issue_processing_count');
+const issuedCount = new Counter('wait_issue_issued_count');
+const duplicateCount = new Counter('wait_issue_duplicate_count');
+const soldOutCount = new Counter('wait_issue_sold_out_count');
+const failedCount = new Counter('wait_issue_failed_count');
+const unexpectedCount = new Counter('wait_issue_unexpected_count');
+const acceptedRate = new Rate('wait_issue_accepted_rate');
 
 export default function () {
   const accountId = nextAccountId();
-  const response = issueCoupon(accountId);
+  const response = register(accountId);
 
   const result = classifyResponse(response);
   recordMetrics(result);
@@ -49,60 +50,51 @@ function nextAccountId() {
   return ((__VU * 10007) + __ITER) % ACCOUNT_COUNT + 1;
 }
 
-function issueCoupon(accountId) {
+function register(accountId) {
   return http.post(
-    `${BASE_URL}/api/v1/coupons/${COUPON_ID}/issue/direct`,
+    `${BASE_URL}/api/v1/coupons/${COUPON_ID}/issue/wait`,
     null,
     {
       headers: {
         'X-Account-Id': String(accountId),
       },
       tags: {
-        api: 'direct-coupon-issue',
+        api: 'wait-coupon-issue',
       },
     }
   );
 }
 
 function classifyResponse(response) {
-  if (response.status === 200) {
-    return 'success';
+  if (response.status !== 200) {
+    return 'unexpected';
   }
 
-  if (response.status === 404) {
-    return 'not_found';
-  }
-
-  if (response.status === 409) {
-    return classifyConflict(response);
-  }
-
-  if (response.status === 503) {
-    return classifyServiceUnavailable(response);
-  }
-
-  return 'unexpected';
-}
-
-function classifyConflict(response) {
   const body = parseJson(response);
+  const status = body?.data?.status;
 
-  if (body?.code === 'COUPON_409_001') {
-    return 'sold_out';
+  if (status === 'WAITING') {
+    return 'waiting';
   }
 
-  if (body?.code === 'COUPON_409_002') {
+  if (status === 'PROCESSING') {
+    return 'processing';
+  }
+
+  if (status === 'ISSUED') {
+    return 'issued';
+  }
+
+  if (status === 'DUPLICATE') {
     return 'duplicate';
   }
 
-  return 'unexpected';
-}
+  if (status === 'SOLD_OUT') {
+    return 'sold_out';
+  }
 
-function classifyServiceUnavailable(response) {
-  const body = parseJson(response);
-
-  if (body?.code === 'DB_503_001') {
-    return 'db_timeout';
+  if (status === 'FAILED') {
+    return 'failed';
   }
 
   return 'unexpected';
@@ -117,15 +109,20 @@ function parseJson(response) {
 }
 
 function recordMetrics(result) {
-  successRate.add(result === 'success');
+  acceptedRate.add(result !== 'unexpected');
 
-  if (result === 'success') {
-    successCount.add(1);
+  if (result === 'waiting') {
+    waitingCount.add(1);
     return;
   }
 
-  if (result === 'sold_out') {
-    soldOutCount.add(1);
+  if (result === 'processing') {
+    processingCount.add(1);
+    return;
+  }
+
+  if (result === 'issued') {
+    issuedCount.add(1);
     return;
   }
 
@@ -134,13 +131,13 @@ function recordMetrics(result) {
     return;
   }
 
-  if (result === 'not_found') {
-    notFoundCount.add(1);
+  if (result === 'sold_out') {
+    soldOutCount.add(1);
     return;
   }
 
-  if (result === 'db_timeout') {
-    dbTimeoutCount.add(1);
+  if (result === 'failed') {
+    failedCount.add(1);
     return;
   }
 

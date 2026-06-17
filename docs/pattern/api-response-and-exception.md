@@ -44,3 +44,6 @@ Error responses use `ErrorResponse`.
 Business code should throw `BusinessException` with an `ErrorCode` instead of throwing raw `RuntimeException`.
 
 `ErrorCode` owns the HTTP status, error code, and user-facing message. This keeps exception responses consistent and avoids scattering hardcoded messages across controllers or services.
+
+DB connection acquisition timeouts are returned as `DB_503_001`.
+The handler checks Spring JDBC, transaction creation, and Hibernate JDBC connection exception chains so Hikari connection timeout failures do not fall back to the generic `COMMON_500_001` response.

@@ -14,9 +14,9 @@ src/main/resources/db/local/seed-coupon-lab.sql
 
 The SQL creates:
 
-- 10,000 dummy accounts
+- 100,000 dummy accounts
 - one coupon named `load-test-coupon`
-- coupon quantity of 1,000
+- coupon quantity of 100,000
 
 Dummy accounts use predictable email and nickname values.
 
@@ -24,7 +24,7 @@ Dummy accounts use predictable email and nickname values.
 load-test-user-1@example.com
 load-test-user-2@example.com
 ...
-load-test-user-10000@example.com
+load-test-user-100000@example.com
 ```
 
 ## Rationale

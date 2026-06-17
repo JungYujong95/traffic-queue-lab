@@ -73,3 +73,32 @@ CouponIssueController
 ```
 
 The direct flow intentionally exposes DB connection pool pressure and coupon row lock contention. The Redis waiting queue flow will be compared against this baseline later.
+
+## Redis Waiting Queue Issue API
+
+The waiting queue issue API accepts load before the database.
+
+```http
+POST /api/v1/coupons/{couponId}/issue/wait
+X-Account-Id: 1
+```
+
+The request path registers the account in Redis and returns a waiting status.
+
+```text
+CouponWaitingController
+  -> CouponWaitingService
+  -> WaitingQueuePort
+  -> Redis waiting queue
+```
+
+The worker path limits DB entry and reuses the existing issue logic.
+
+```text
+CouponWaitingWorker
+  -> WaitingQueuePort.dequeue()
+  -> CouponIssueService.issueDirect()
+  -> WaitingQueuePort.saveResult()
+```
+
+Redis is used for admission control. The database remains the source of truth for coupon quantity and duplicate issue prevention.
